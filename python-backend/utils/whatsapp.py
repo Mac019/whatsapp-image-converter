@@ -5,7 +5,7 @@ Handles all communication with Meta's WhatsApp Business API.
 
 import httpx
 import logging
-from typing import Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,42 @@ BASE_URL = "https://graph.facebook.com/v18.0"
 async def verify_webhook_token(received_token: str, expected_token: str) -> bool:
     """Verify the webhook token matches."""
     return received_token == expected_token
+
+
+async def send_typing_indicator(settings: dict, recipient: str, message_id: str) -> None:
+    """
+    Mark a message as read (blue ticks) and show a typing indicator.
+    The typing indicator stays for up to 25 seconds or until a reply is sent.
+    """
+    access_token = settings.get("access_token")
+    phone_number_id = settings.get("phone_number_id")
+
+    if not access_token or not phone_number_id:
+        return
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{BASE_URL}/{phone_number_id}/messages",
+                headers=headers,
+                json={
+                    "messaging_product": "whatsapp",
+                    "status": "read",
+                    "message_id": message_id,
+                    "typing_indicator": {
+                        "type": "text",
+                    },
+                },
+                timeout=10.0,
+            )
+        logger.info(f"Sent typing indicator to {recipient}")
+    except Exception as e:
+        logger.warning(f"Failed to send typing indicator: {e}")
 
 
 async def download_media(settings: dict, media_id: str) -> bytes:
@@ -133,6 +169,66 @@ async def send_document_message(
         response.raise_for_status()
         
         logger.info(f"Sent document to {recipient}")
+        return response.json()
+
+
+async def send_button_message(
+    settings: dict,
+    recipient: str,
+    body_text: str,
+    buttons: List[Dict],
+):
+    """
+    Send an interactive button message to a WhatsApp user.
+    WhatsApp allows up to 3 buttons per message.
+
+    Args:
+        settings: API settings dict
+        recipient: Phone number to send to
+        body_text: Message body text
+        buttons: List of {"id": "btn_xxx", "title": "Button Label"} dicts (max 3)
+    """
+    access_token = settings.get("access_token")
+    phone_number_id = settings.get("phone_number_id")
+
+    if not access_token or not phone_number_id:
+        raise ValueError("Access token or phone number ID not configured")
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": recipient,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": body_text},
+            "action": {
+                "buttons": [
+                    {
+                        "type": "reply",
+                        "reply": {"id": btn["id"], "title": btn["title"]},
+                    }
+                    for btn in buttons[:3]  # WhatsApp max 3 buttons
+                ]
+            },
+        },
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{BASE_URL}/{phone_number_id}/messages",
+            headers=headers,
+            json=payload,
+            timeout=30.0,
+        )
+        response.raise_for_status()
+
+        logger.info(f"Sent button message to {recipient}")
         return response.json()
 
 
