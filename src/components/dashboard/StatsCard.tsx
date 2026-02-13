@@ -1,27 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileImage, Clock, CheckCircle, AlertCircle } from "lucide-react";
-
-interface Stats {
-  total_conversions: number;
-  today_conversions: number;
-  success_rate: number;
-  pending: number;
-}
-
-const fetchStats = async (): Promise<Stats> => {
-  const response = await fetch("http://localhost:8000/api/admin/stats");
-  if (!response.ok) {
-    throw new Error("Failed to fetch stats");
-  }
-  return response.json();
-};
+import { api, AdminStats } from "@/lib/api";
+import {
+  FileImage, Clock, CheckCircle, AlertCircle,
+  Users, Timer, Star, HardDrive,
+} from "lucide-react";
 
 export const StatsCard = () => {
   const { data: stats, isLoading, error } = useQuery({
     queryKey: ["stats"],
-    queryFn: fetchStats,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    queryFn: api.getStats,
+    refetchInterval: 30000,
   });
 
   const statsData = [
@@ -47,6 +36,38 @@ export const StatsCard = () => {
       color: "text-green-500",
     },
     {
+      title: "Active Users",
+      value: stats?.active_users ?? 0,
+      icon: Users,
+      description: "Unique users",
+      color: "text-purple-500",
+    },
+    {
+      title: "Avg Time",
+      value: stats?.avg_processing_time_ms
+        ? `${(stats.avg_processing_time_ms / 1000).toFixed(1)}s`
+        : "—",
+      icon: Timer,
+      description: "Processing time",
+      color: "text-orange-500",
+    },
+    {
+      title: "Top Feature",
+      value: stats?.top_feature || "—",
+      icon: Star,
+      description: "Most used",
+      color: "text-yellow-500",
+    },
+    {
+      title: "Bandwidth",
+      value: stats?.total_bandwidth_mb
+        ? `${stats.total_bandwidth_mb.toFixed(1)} MB`
+        : "0 MB",
+      icon: HardDrive,
+      description: "Total processed",
+      color: "text-cyan-500",
+    },
+    {
       title: "Pending",
       value: stats?.pending ?? 0,
       icon: AlertCircle,
@@ -61,7 +82,7 @@ export const StatsCard = () => {
         <CardHeader>
           <CardTitle className="text-destructive">Connection Error</CardTitle>
           <CardDescription>
-            Cannot connect to backend at localhost:8000. Make sure Python server is running.
+            Cannot connect to backend. Make sure Python server is running.
           </CardDescription>
         </CardHeader>
       </Card>

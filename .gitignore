@@ -28,3 +28,4 @@ __pycache__/
 *.pyc
 .env
 data/
+python-backend/data/

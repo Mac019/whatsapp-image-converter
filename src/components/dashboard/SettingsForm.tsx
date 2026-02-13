@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Eye, EyeOff, Save, Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
 
 const settingsSchema = z.object({
   whatsapp_business_account_id: z.string().min(1, "Required"),
@@ -35,21 +36,17 @@ export const SettingsForm = () => {
     },
   });
 
-  // Load existing settings
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const response = await fetch("http://localhost:8000/api/admin/settings");
-        if (response.ok) {
-          const settings = await response.json();
-          form.reset({
-            whatsapp_business_account_id: settings.whatsapp_business_account_id || "",
-            phone_number_id: settings.phone_number_id || "",
-            access_token: settings.access_token || "",
-            webhook_verify_token: settings.webhook_verify_token || "",
-            admin_password: "",
-          });
-        }
+        const settings = await api.getSettings();
+        form.reset({
+          whatsapp_business_account_id: settings.whatsapp_business_account_id || "",
+          phone_number_id: settings.phone_number_id || "",
+          access_token: settings.access_token || "",
+          webhook_verify_token: settings.webhook_verify_token || "",
+          admin_password: "",
+        });
       } catch (error) {
         console.error("Failed to load settings:", error);
       }
@@ -60,23 +57,11 @@ export const SettingsForm = () => {
   const onSubmit = async (data: SettingsFormData) => {
     setIsLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/api/admin/settings", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (response.ok) {
-        toast.success("Settings saved successfully!");
-        form.setValue("admin_password", "");
-      } else {
-        const error = await response.json();
-        toast.error(error.detail || "Failed to save settings");
-      }
-    } catch (error) {
-      toast.error("Cannot connect to backend server");
+      await api.saveSettings(data);
+      toast.success("Settings saved successfully!");
+      form.setValue("admin_password", "");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to save settings");
     } finally {
       setIsLoading(false);
     }
@@ -104,7 +89,7 @@ export const SettingsForm = () => {
                       <Input placeholder="123456789012345" {...field} />
                     </FormControl>
                     <FormDescription>
-                      Found in Meta Business Suite → WhatsApp Accounts
+                      Found in Meta Business Suite
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

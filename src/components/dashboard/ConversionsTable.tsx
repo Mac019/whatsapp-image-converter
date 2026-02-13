@@ -1,27 +1,15 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { api, Conversion } from "@/lib/api";
 import { format } from "date-fns";
-
-interface Conversion {
-  id: string;
-  phone_number: string;
-  timestamp: string;
-  status: "success" | "failed" | "pending";
-  file_size: number;
-}
-
-const fetchConversions = async (): Promise<Conversion[]> => {
-  const response = await fetch("http://localhost:8000/api/admin/conversions");
-  if (!response.ok) {
-    throw new Error("Failed to fetch conversions");
-  }
-  return response.json();
-};
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 const formatPhoneNumber = (phone: string) => {
-  // Mask middle digits for privacy
   if (phone.length > 6) {
     return phone.slice(0, 4) + "****" + phone.slice(-4);
   }
@@ -34,11 +22,44 @@ const formatFileSize = (bytes: number) => {
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 };
 
+const ConversionDetail = ({ conversion }: { conversion: Conversion }) => {
+  const [open, setOpen] = useState(false);
+
+  const hasDetails = conversion.feature || conversion.processing_time_ms || conversion.error_message;
+  if (!hasDetails) return null;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+          {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-2 space-y-1 rounded bg-muted p-2 text-xs">
+          {conversion.feature && <p><span className="font-medium">Feature:</span> {conversion.feature}</p>}
+          {conversion.input_type && <p><span className="font-medium">Input:</span> {conversion.input_type}</p>}
+          {conversion.output_type && <p><span className="font-medium">Output:</span> {conversion.output_type}</p>}
+          {conversion.processing_time_ms != null && (
+            <p><span className="font-medium">Time:</span> {(conversion.processing_time_ms / 1000).toFixed(2)}s</p>
+          )}
+          {conversion.output_file_size != null && (
+            <p><span className="font-medium">Output size:</span> {formatFileSize(conversion.output_file_size)}</p>
+          )}
+          {conversion.error_message && (
+            <p className="text-destructive"><span className="font-medium">Error:</span> {conversion.error_message}</p>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
+
 export const ConversionsTable = () => {
   const { data: conversions, isLoading, error } = useQuery({
     queryKey: ["conversions"],
-    queryFn: fetchConversions,
-    refetchInterval: 10000, // Refresh every 10 seconds
+    queryFn: api.getConversions,
+    refetchInterval: 10000,
   });
 
   const getStatusBadge = (status: string) => {
@@ -60,7 +81,7 @@ export const ConversionsTable = () => {
         <CardHeader>
           <CardTitle className="text-destructive">Connection Error</CardTitle>
           <CardDescription>
-            Cannot connect to backend. Make sure Python server is running on localhost:8000
+            Cannot connect to backend. Make sure Python server is running.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -72,7 +93,7 @@ export const ConversionsTable = () => {
       <CardHeader>
         <CardTitle>Recent Conversions</CardTitle>
         <CardDescription>
-          History of image to PDF conversions via WhatsApp
+          History of document conversions via WhatsApp
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -86,8 +107,10 @@ export const ConversionsTable = () => {
               <TableRow>
                 <TableHead>Time</TableHead>
                 <TableHead>Phone Number</TableHead>
+                <TableHead>Feature</TableHead>
                 <TableHead>File Size</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -97,8 +120,16 @@ export const ConversionsTable = () => {
                     {format(new Date(conversion.timestamp), "MMM dd, HH:mm:ss")}
                   </TableCell>
                   <TableCell>{formatPhoneNumber(conversion.phone_number)}</TableCell>
+                  <TableCell>
+                    {conversion.feature ? (
+                      <Badge variant="outline" className="text-xs">{conversion.feature}</Badge>
+                    ) : "—"}
+                  </TableCell>
                   <TableCell>{formatFileSize(conversion.file_size)}</TableCell>
                   <TableCell>{getStatusBadge(conversion.status)}</TableCell>
+                  <TableCell>
+                    <ConversionDetail conversion={conversion} />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
